@@ -1,0 +1,933 @@
+{
+  "info": {
+    "name": "Crypto Planet API",
+    "_postman_id": "b7e2c8a1-crypto-planet-0001",
+    "description": "Bộ sưu tập kiểm thử API Crypto Planet (dự án học tập MERN). Cách dùng:\n1. Import file Environment (Crypto-Planet.postman_environment.json) và chọn nó.\n2. Chạy 'Đăng nhập người dùng demo' và 'Đăng nhập quản trị viên' trước để lấy token.\n3. Các biến tradeId/depositId/withdrawalId/ticketId tự lưu khi chạy các request tương ứng.\n4. Trước mỗi lần MUA/BẢN mới, đổi giá trị biến idempotencyKey (để tránh trả về kết quả cũ).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "00. Kiểm tra hệ thống",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/health", "host": ["{{baseUrl}}"], "path": ["api", "health"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01. Xác thực",
+      "item": [
+        {
+          "name": "Đăng ký tài khoản",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Nguyễn Văn Test\",\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"123456\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201 — đăng ký thành công\", () => pm.response.to.have.status(201));",
+                  "const res = pm.response.json();",
+                  "pm.test(\"Không trả về mật khẩu\", () => pm.expect(res.data.user).to.not.have.property(\"password\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Đăng ký email đã tồn tại (409)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Trùng email\",\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"123456\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"HTTP 409 — email đã tồn tại\", () => pm.response.to.have.status(409));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Đăng nhập — người dùng demo (lưu token)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"demo@cryptoplanet.vn\",\n  \"password\": \"demo1234\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.environment.set(\"token\", res.data.token);",
+                  "pm.environment.set(\"userId\", res.data.user.id);",
+                  "pm.test(\"HTTP 200 — đăng nhập thành công\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Đăng nhập — quản trị viên (lưu adminToken)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"admin@cryptoplanet.vn\",\n  \"password\": \"{{adminPassword}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.environment.set(\"adminToken\", res.data.token);",
+                  "pm.test(\"HTTP 200 — admin đăng nhập thành công\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Đăng nhập sai mật khẩu (401)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"email\": \"demo@cryptoplanet.vn\",\n  \"password\": \"sai-mat-khau\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401 — sai mật khẩu\", () => pm.response.to.have.status(401));",
+                  "const res = pm.response.json();",
+                  "pm.test(\"Thông báo tiếng Việt\", () => pm.expect(res.message).to.include(\"Email hoặc mật khẩu\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Xem thông tin tài khoản hiện tại",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] }
+          }
+        },
+        {
+          "name": "Cập nhật tên hiển thị",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Người dùng Demo\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] }
+          }
+        },
+        {
+          "name": "Đổi mật khẩu",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"currentPassword\": \"demo1234\",\n  \"newPassword\": \"demo1234\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/auth/change-password", "host": ["{{baseUrl}}"], "path": ["api", "auth", "change-password"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Thị trường",
+      "item": [
+        {
+          "name": "Danh sách tiền điện tử",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/market/cryptocurrencies?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "market", "cryptocurrencies"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Tìm kiếm tiền điện tử (q=bit)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/market/cryptocurrencies?q=bit",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "market", "cryptocurrencies"],
+              "query": [{ "key": "q", "value": "bit" }]
+            }
+          }
+        },
+        {
+          "name": "Chi tiết tài sản",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/market/cryptocurrencies/{{symbol}}", "host": ["{{baseUrl}}"], "path": ["api", "market", "cryptocurrencies", "{{symbol}}"] }
+          }
+        },
+        {
+          "name": "Tài sản không tồn tại (404)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/market/cryptocurrencies/XXXXXX", "host": ["{{baseUrl}}"], "path": ["api", "market", "cryptocurrencies", "XXXXXX"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03. Ví",
+      "item": [
+        {
+          "name": "Số dư ví + tổng tài sản",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/wallets", "host": ["{{baseUrl}}"], "path": ["api", "wallets"] }
+          }
+        },
+        {
+          "name": "Lịch sử biến động số dư",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/wallets/histories?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "wallets", "histories"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "API riêng tư khi chưa đăng nhập (401)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/wallets", "host": ["{{baseUrl}}"], "path": ["api", "wallets"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"HTTP 401 — chưa đăng nhập\", () => pm.response.to.have.status(401));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04. Giao dịch",
+      "item": [
+        {
+          "name": "Mua lệnh thị trường (lưu tradeId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"symbol\": \"{{symbol}}\",\n  \"side\": \"buy\",\n  \"quantity\": 0.001,\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/trades", "host": ["{{baseUrl}}"], "path": ["api", "trades"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.environment.set(\"tradeId\", res.data.transaction._id);",
+                  "pm.test(\"HTTP 201 — mua thành công, trạng thái completed\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(res.data.transaction.status).to.eql(\"completed\");",
+                  "});",
+                  "pm.test(\"Giá được ghi lại tại thời điểm thực hiện\", () => pm.expect(res.data.transaction.price).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Gửi lại CÙNG idempotencyKey — không trừ tiền lần 2",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"symbol\": \"{{symbol}}\",\n  \"side\": \"buy\",\n  \"quantity\": 0.001,\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/trades", "host": ["{{baseUrl}}"], "path": ["api", "trades"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.test(\"HTTP 200 — trả về kết quả gốc, replayed=true\", () => {",
+                  "  pm.response.to.have.status(200);",
+                  "  pm.expect(res.data.replayed).to.eql(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mua vượt số dư (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"symbol\": \"{{symbol}}\",\n  \"side\": \"buy\",\n  \"quantity\": 100000,\n  \"idempotencyKey\": \"overbuy-{{$timestamp}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/trades", "host": ["{{baseUrl}}"], "path": ["api", "trades"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400 — số dư không đủ\", () => pm.response.to.have.status(400));",
+                  "const res = pm.response.json();",
+                  "pm.test(\"Lỗi tiếng Việt\", () => pm.expect(res.message).to.include(\"không đủ\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Số lượng âm (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"symbol\": \"{{symbol}}\",\n  \"side\": \"buy\",\n  \"quantity\": -1,\n  \"idempotencyKey\": \"negative-{{$timestamp}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/trades", "host": ["{{baseUrl}}"], "path": ["api", "trades"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"HTTP 400 — số lượng phải lớn hơn 0\", () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Bán lệnh thị trường",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"symbol\": \"{{symbol}}\",\n  \"side\": \"sell\",\n  \"quantity\": 0.0005,\n  \"idempotencyKey\": \"sell-{{$timestamp}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/trades", "host": ["{{baseUrl}}"], "path": ["api", "trades"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201 — bán thành công\", () => pm.response.to.have.status(201));",
+                  "const res = pm.response.json();",
+                  "pm.test(\"Có phí 0.5%\", () => pm.expect(res.data.transaction.feeVND).to.be.at.least(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lịch sử giao dịch của tôi",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/trades?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "trades"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Chi tiết giao dịch",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/trades/{{tradeId}}", "host": ["{{baseUrl}}"], "path": ["api", "trades", "{{tradeId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Nạp / Rút (người dùng)",
+      "item": [
+        {
+          "name": "Tạo yêu cầu nạp (lưu depositId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"amountVND\": 500000\n}" },
+            "url": { "raw": "{{baseUrl}}/api/deposits", "host": ["{{baseUrl}}"], "path": ["api", "deposits"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.environment.set(\"depositId\", res.data.request._id);",
+                  "pm.test(\"HTTP 201 — yêu cầu chờ duyệt\", () => {",
+                  "  pm.response.to.have.status(201);",
+                  "  pm.expect(res.data.request.status).to.eql(\"pending\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nạp dưới mức tối thiểu (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"amountVND\": 1000\n}" },
+            "url": { "raw": "{{baseUrl}}/api/deposits", "host": ["{{baseUrl}}"], "path": ["api", "deposits"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"HTTP 400 — dưới mức tối thiểu\", () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Danh sách yêu cầu nạp của tôi",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/deposits", "host": ["{{baseUrl}}"], "path": ["api", "deposits"] }
+          }
+        },
+        {
+          "name": "Tạo yêu cầu rút (lưu withdrawalId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"amountVND\": 100000\n}" },
+            "url": { "raw": "{{baseUrl}}/api/withdrawals", "host": ["{{baseUrl}}"], "path": ["api", "withdrawals"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.environment.set(\"withdrawalId\", res.data.request._id);",
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Danh sách yêu cầu rút của tôi",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/withdrawals", "host": ["{{baseUrl}}"], "path": ["api", "withdrawals"] }
+          }
+        },
+        {
+          "name": "Hủy yêu cầu rút đang chờ",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/withdrawals/{{withdrawalId}}/cancel", "host": ["{{baseUrl}}"], "path": ["api", "withdrawals", "{{withdrawalId}}", "cancel"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Hỗ trợ & nội dung",
+      "item": [
+        {
+          "name": "Danh sách FAQ (công khai)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/faqs", "host": ["{{baseUrl}}"], "path": ["api", "faqs"] }
+          }
+        },
+        {
+          "name": "Gửi yêu cầu hỗ trợ (lưu ticketId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"subject\": \"Câu hỏi kiểm thử qua Postman\",\n  \"message\": \"Đây là nội dung yêu cầu hỗ trợ được tạo tự động từ Postman.\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/support/tickets", "host": ["{{baseUrl}}"], "path": ["api", "support", "tickets"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "pm.environment.set(\"ticketId\", res.data.ticket._id);",
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Danh sách ticket của tôi",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/support/tickets", "host": ["{{baseUrl}}"], "path": ["api", "support", "tickets"] }
+          }
+        },
+        {
+          "name": "Thông báo hệ thống",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/notifications", "host": ["{{baseUrl}}"], "path": ["api", "notifications"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Quản trị",
+      "item": [
+        {
+          "name": "Thống kê tổng quan",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/stats", "host": ["{{baseUrl}}"], "path": ["api", "admin", "stats"] }
+          }
+        },
+        {
+          "name": "User thường gọi API admin (403)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/users", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"HTTP 403 — không đủ quyền\", () => pm.response.to.have.status(403));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Danh sách người dùng",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Chi tiết người dùng demo",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{userId}}", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{userId}}"] }
+          }
+        },
+        {
+          "name": "Điều chỉnh số dư +1.000.000 VND (kèm lý do)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"currencySymbol\": \"VND\",\n  \"changeAmount\": 1000000,\n  \"reason\": \"Kiểm thử qua Postman: cộng vốn\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{userId}}/balances", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{userId}}", "balances"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 — điều chỉnh thành công\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Điều chỉnh số dư THIẾU lý do (400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"currencySymbol\": \"VND\",\n  \"changeAmount\": 500000\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{userId}}/balances", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{userId}}", "balances"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400 — lý do là bắt buộc\", () => pm.response.to.have.status(400));",
+                  "const res = pm.response.json();",
+                  "pm.test(\"Thông báo nhắc lý do\", () => pm.expect(res.message).to.include(\"Lý do\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Khóa tài khoản",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"locked\",\n  \"reason\": \"Kiểm thử Postman: khóa tạm thời\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{userId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{userId}}", "status"] }
+          }
+        },
+        {
+          "name": "Tài khoản bị khóa gọi API (403)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/api/wallets", "host": ["{{baseUrl}}"], "path": ["api", "wallets"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"HTTP 403 — tài khoản bị khóa\", () => pm.response.to.have.status(403));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Mở khóa tài khoản",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"active\",\n  \"reason\": \"Kiểm thử Postman: mở lại\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{userId}}/status", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{userId}}", "status"] }
+          }
+        },
+        {
+          "name": "Giao dịch của người dùng",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{userId}}/transactions?page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{userId}}", "transactions"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Sổ cái biến động của người dùng",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/users/{{userId}}/balance-histories?page=1&limit=10", "host": ["{{baseUrl}}"], "path": ["api", "admin", "users", "{{userId}}", "balance-histories"], "query": [{ "key": "page", "value": "1" }, { "key": "limit", "value": "10" }] }
+          }
+        },
+        {
+          "name": "Danh sách tiền điện tử (đầy đủ, gồm cả ẩn)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/cryptocurrencies", "host": ["{{baseUrl}}"], "path": ["api", "admin", "cryptocurrencies"] }
+          }
+        },
+        {
+          "name": "Thêm tài sản mới",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"TestCoin\",\n  \"symbol\": \"TEST\",\n  \"currentPriceVND\": 50000,\n  \"changePercent\": 0,\n  \"description\": \"Tài sản kiểm thử tạo từ Postman\",\n  \"isActive\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/cryptocurrencies", "host": ["{{baseUrl}}"], "path": ["api", "admin", "cryptocurrencies"] }
+          }
+        },
+        {
+          "name": "Sửa giá tài sản",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"currentPriceVND\": 60000\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/cryptocurrencies/{{symbol}}", "host": ["{{baseUrl}}"], "path": ["api", "admin", "cryptocurrencies", "{{symbol}}"] }
+          }
+        },
+        {
+          "name": "Ẩn tài sản TEST",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"isActive\": false\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/cryptocurrencies/TEST", "host": ["{{baseUrl}}"], "path": ["api", "admin", "cryptocurrencies", "TEST"] }
+          }
+        },
+        {
+          "name": "Đổi mã tài sản (400 — không cho phép)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"symbol\": \"OTHER\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/cryptocurrencies/TEST", "host": ["{{baseUrl}}"], "path": ["api", "admin", "cryptocurrencies", "TEST"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"HTTP 400 — mã tài sản không thể thay đổi\", () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Toàn bộ giao dịch (lọc theo email)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/transactions?email=demo@cryptoplanet.vn&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "transactions"],
+              "query": [
+                { "key": "email", "value": "demo@cryptoplanet.vn" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Danh sách yêu cầu nạp (admin)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deposits?status=pending&page=1&limit=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deposits"],
+              "query": [
+                { "key": "status", "value": "pending" },
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Duyệt yêu cầu nạp",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/deposits/{{depositId}}/approve", "host": ["{{baseUrl}}"], "path": ["api", "admin", "deposits", "{{depositId}}", "approve"] }
+          }
+        },
+        {
+          "name": "Duyệt yêu cầu nạp lần 2 (409)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/deposits/{{depositId}}/approve", "host": ["{{baseUrl}}"], "path": ["api", "admin", "deposits", "{{depositId}}", "approve"] }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test(\"HTTP 409 — chặn duyệt/cộng tiền 2 lần\", () => pm.response.to.have.status(409));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Từ chối yêu cầu rút",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"adminNote\": \"Kiểm thử Postman: từ chối\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/withdrawals/{{withdrawalId}}/reject", "host": ["{{baseUrl}}"], "path": ["api", "admin", "withdrawals", "{{withdrawalId}}", "reject"] }
+          }
+        },
+        {
+          "name": "Danh sách ticket hỗ trợ",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": { "raw": "{{baseUrl}}/api/admin/tickets", "host": ["{{baseUrl}}"], "path": ["api", "admin", "tickets"] }
+          }
+        },
+        {
+          "name": "Phản hồi ticket",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"adminResponse\": \"Cảm ơn bạn đã liên hệ. Chúng tôi đã xử lý yêu cầu của bạn.\",\n  \"status\": \"answered\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/tickets/{{ticketId}}", "host": ["{{baseUrl}}"], "path": ["api", "admin", "tickets", "{{ticketId}}"] }
+          }
+        },
+        {
+          "name": "Đăng thông báo hệ thống",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{adminToken}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Thông báo bảo trì định kỳ\",\n  \"content\": \"Hệ thống sẽ bảo trì mô phỏng vào lúc 0h tối nay. Đây là thông báo kiểm thử từ Postman.\",\n  \"type\": \"maintenance\",\n  \"isPublished\": true\n}" },
+            "url": { "raw": "{{baseUrl}}/api/admin/notifications", "host": ["{{baseUrl}}"], "path": ["api", "admin", "notifications"] }
+          }
+        },
+        {
+          "name": "Xem nhật ký thao tác quản trị",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{adminToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/audit-logs?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "audit-logs"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000" },
+    { "key": "symbol", "value": "BTC" }
+  ]
+}

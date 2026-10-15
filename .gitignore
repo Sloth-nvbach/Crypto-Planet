@@ -1,0 +1,21 @@
+# Phụ thuộc
+node_modules/
+
+# Build
+dist/
+build/
+
+# Biến môi trường (chứa thông tin nhạy cảm)
+.env
+.env.local
+*.local
+
+# Nhật ký
+*.log
+logs/
+
+# Hệ điều hành / trình soạn thảo
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
